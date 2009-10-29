@@ -1,0 +1,4 @@
+<sitemesh>
+	<!-- handled by the meta tag <meta name="layout" content="welcome"> which turns into a decorator called
+	     /WEB-INF/includes/welcome.gtpl -->
+</sitemesh>

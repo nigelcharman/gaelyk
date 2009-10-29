@@ -1,5 +1,8 @@
-<% include '/WEB-INF/includes/header.gtpl' %>
-
+<html>
+<head>
+<meta name="layout" content="welcome">
+</head>
+<body>
 <h1>Welcome</h1>
 
 <p>
@@ -10,6 +13,6 @@
 <p>
     Click <a href="datetime.groovy">here</a> to view the current date/time.
 </p>
-
-<% include '/WEB-INF/includes/footer.gtpl' %>
+</body>
+</html>
 
