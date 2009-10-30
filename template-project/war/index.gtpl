@@ -1,7 +1,6 @@
 <html>
 <head>
-<link rel="layout" href="welcome">
-<title>Welcome</title>
+<meta name="layout" content="welcome">
 </head>
 <body>
 <h1>Welcome</h1>
