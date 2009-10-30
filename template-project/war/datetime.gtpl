@@ -1,6 +1,7 @@
 <html>
 <head>
-<meta name="layout" content="welcome">
+<link rel="layout" href="welcome">
+<title>Date Time</title>
 </head>
 <body>
 <h1>Date / time</h1>
