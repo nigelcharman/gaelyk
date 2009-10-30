@@ -1,7 +1,8 @@
-website
+website/war/api
 test
 .classpath
 .project
 core/bin
 .settings
 core/target
+.DS_Store
