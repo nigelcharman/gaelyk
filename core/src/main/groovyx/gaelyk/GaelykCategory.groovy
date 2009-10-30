@@ -76,7 +76,7 @@ class GaelykCategory {
 
 
     /**
-     * Additional <code>sendToAdmins()</code> method for sending emails to the application admins. 
+     * Additional <code>sendToAdmins()</code> method for sending emails to the application admins.
      * This method is taking a map as parameter.
      * The map can contain the normal properties of the
      * <code>MailService.Message</code> class.
@@ -88,7 +88,7 @@ class GaelykCategory {
      */
     static void sendToAdmins(MailService mailService, Map m) {
         Message msg = createMessageFromMap(m)
-        mailService.sendToAdmins msg 
+        mailService.sendToAdmins msg
     }
 
     // ----------------------------------------------------------------
@@ -265,7 +265,7 @@ class GaelykCategory {
 
     /**
      * Add a new task on the queue using a map for holding the task attributes instead of a TaskOptions builder object.
-     * This method adds a <code>&lt;&lt;</code> operator on the <code>Queue</code> for adding new tasks to it. 
+     * This method adds a <code>&lt;&lt;</code> operator on the <code>Queue</code> for adding new tasks to it.
      * <p>
      * Allowed keys are: <ul>
      * <li><code>countdownMillis</code></li>
@@ -399,7 +399,7 @@ class GaelykCategory {
     /**
      * Get the XML content of this message (if it's an XML message) in the form of a DOM parsed with XmlSlurper.
      *
-     * @return the slurped XML document 
+     * @return the slurped XML document
      */
     static GPathResult getXml(com.google.appengine.api.xmpp.Message message) {
         if (message.isXml()) {
@@ -458,4 +458,18 @@ class GaelykCategory {
     static boolean isCase(MemcacheService memcache, Object key) {
         memcache.contains(key)
     }
+
+    static Object set(groovy.lang.Script binding, Object key, Object val) {
+      binding.request.setAttribute key, val
+      return val
+    }
+
+    static Object get(groovy.lang.Script binding, Object key) {
+      return binding.request.getAttribute(key)
+    }
+
+    static void sendRedirect(groovy.lang.Script binding, Object url) {
+      binding.response.sendRedirect url
+    }
+
 }
