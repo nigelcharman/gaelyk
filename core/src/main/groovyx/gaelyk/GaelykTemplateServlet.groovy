@@ -30,17 +30,19 @@ import javax.servlet.http.HttpServletResponse
  * @see groovy.servlet.TemplateServlet
  */
 class GaelykTemplateServlet extends TemplateServlet {
-
-    @Override
-    protected void setVariables(ServletBinding binding) {
-        GaelykBindingEnhancer enhancer = new GaelykBindingEnhancer(binding)
-        enhancer.bind()
-    }
-
-    @Override
-    void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        use (GaelykCategory) {
-            super.service(request, response)
-        }
-    }
+	
+	@Override
+	protected void setVariables(ServletBinding binding) {
+		GaelykBindingEnhancer enhancer = new GaelykBindingEnhancer(binding)
+		enhancer.bind()
+		GaelykModelBindingEnhancer modelEnhancer = new GaelykModelBindingEnhancer(binding)
+		modelEnhancer.template();
+	}
+	
+	@Override
+	void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
+		use (GaelykCategory) {
+			super.service(request, response)
+		}
+	}
 }

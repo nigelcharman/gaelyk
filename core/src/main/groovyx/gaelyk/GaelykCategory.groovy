@@ -42,434 +42,450 @@ import com.google.appengine.api.memcache.MemcacheService
  * @author Guillaume Laforge
  */
 class GaelykCategory {
-
-    // ----------------------------------------------------------------
-    // Category methods dedicated to the Mail service
-    // ----------------------------------------------------------------
-
-    /**
-     * Create a <code>MailService.Message</code> out of Map parameters.
-     * Each map key must correspond to a valid property on the message object.
-     */
-
-    private static Message createMessageFromMap(Map m) {
-        def msg = new Message()
-        m.each {k, v ->
-            if (v instanceof String) v = [v]
-            msg[k] = v
-        }
-        return msg
-    }
-
-    /**
-     * Additional <code>send()</code> method taking a map as parameter.
-     * The map can contain the normal properties of the
-     * <code>MailService.Message</code> class.
-     *
-     * @throws groovy.lang.MissingPropertyException when the key doesn't correspond
-     * to a property of the <code>MailService.Message</code> class.
-     */
-    static void send(MailService mailService, Map m) {
-        Message msg = createMessageFromMap(m)
-        mailService.send msg
-    }
-
-
-    /**
-     * Additional <code>sendToAdmins()</code> method for sending emails to the application admins.
-     * This method is taking a map as parameter.
-     * The map can contain the normal properties of the
-     * <code>MailService.Message</code> class.
-     *
-     * @param
-     *
-     * @throws groovy.lang.MissingPropertyException when the key doesn't correspond
-     * to a property of the <code>MailService.Message</code> class.
-     */
-    static void sendToAdmins(MailService mailService, Map m) {
-        Message msg = createMessageFromMap(m)
-        mailService.sendToAdmins msg
-    }
-
-    // ----------------------------------------------------------------
-    // Category methods dedicated to the low-level DataStore service
-    // ----------------------------------------------------------------
-
-    /**
-     * Provides a shortcut notation to get a property of an entity.
-     * Instead of writing
-     * <code>entity.getProperty('propertyName')</code>
-     * You can use the shortcut
-     * <code>entity['propertyName']</code>
-     */
-    static Object getAt(Entity entity, String name) {
-        entity.getProperty(name)
-    }
-
-    /**
-     * Provides a shortcut notation to get a property of an entity.
-     * Instead of writing
-     * <code>entity.getProperty('propertyName')</code>
-     * You can use the shortcut
-     * <code>entity.propertyName</code>
-     */
-    static Object get(Entity entity, String name) {
-        entity.getProperty(name)
-    }
-
-    /**
-     * Provides a shortcut notation to set a property of an entity.
-     * Instead of writing
-     * <code>entity.setProperty('propertyName', value)</code>
-     * You can use the shortcut
-     * <code>entity.propertyName = value</code>
-     * Or
-     * <code>entity['propertyName'] = value</code>
-     */
-    static Object setAt(Entity entity, String name, Object value) {
-        entity.setProperty(name, value)
-    }
-
-    /**
-     * Provides a shortcut notation to set a property of an entity.
-     * Instead of writing
-     * <code>entity.setProperty('propertyName', value)</code>
-     * You can use the shortcut
-     * <code>entity.propertyName = value</code>
-     * Or
-     * <code>entity['propertyName'] = value</code>
-     */
-    static Object set(Entity entity, String name, Object value) {
-        entity.setProperty(name, value)
-    }
-
-    /**
-     * Save this entity in the data store.
-     * Usage: <code>entity.save()</code>
-     */
-    static Object save(Entity entity) {
-        DatastoreServiceFactory.datastoreService.put(entity)
-    }
-
-    /**
-     * Delete this entity from the data store.
-     * Usage: <code>entity.delete()</code>
-     */
-    static Object delete(Entity entity) {
-        DatastoreServiceFactory.datastoreService.delete(entity.key)
-    }
-
-    /**
-     * With this method, transaction handling is done transparently.
-     * The transaction is committed if the closure executed properly.
-     * The transaction is rollbacked if anything went wrong.
-     * You can use this method as follows:
-     * <code>
-     * datastoreService.withTransaction { transaction ->
-     *     // do something in that transaction
-     * }
-     * </code>
-     */
-    static Transaction withTransaction(DatastoreService service, Closure c) {
-        Transaction transaction = service.beginTransaction()
-        try {
-            // pass the transaction as single parameter of the closure
-            c(transaction)
-            // commit the transaction if the closure executed without throwing an exception
-            transaction.commit()
-        } catch (e) {
-            // rollback on error
-            transaction.rollback()
-            // rethrow the exception
-            throw e
-        }
-    }
-
-    // ----------------------------------------------------------------
-    // Category methods dedicated to the task queue system
-    // ----------------------------------------------------------------
-
-    /**
-     * Shorcut to get the name of the Queue.
-     * <p>
-     * Instead of having to call <code>queue.getQueueName()</code> or <code>queue.queueName</code>,
-     * you can use the syntax <code>queue.name</code> which is more concise.
-     *
-     * @return the name of the queue
-     */
-    static String getName(Queue selfQueue) {
-        selfQueue.getQueueName()
-    }
-
-    /**
-     * Add a new task on the queue using a map for holding the task attributes instead of a TaskOptions builder object.
-     * <p>
-     * Allowed keys are: <ul>
-     * <li><code>countdownMillis</code></li>
-     * <li><code>etaMillis</code></li>
-     * <li><code>headers</code> (a map of key/value pairs)</li>
-     * <li><code>method</code> (can be 'GET', 'POST', 'PUT', 'DELETE', 'HEAD' or an enum of TaskOptions.Method)</li>
-     * <li><code>params</code> (a map of key/value parameters)</li>
-     * <li><code>payload</code></li>
-     * <li><code>taskName</code></li>
-     * <li><code>url</code></li>
-     * </ul>
-     *
-     * @param params the map of task attributes
-     * @return a TaskHandle instance
-     */
-    static TaskHandle add(Queue selfQueue, Map params) {
-        def options = TaskOptions.Builder.withDefaults()
-        params.each { key, value ->
-            if (key in ['countdownMillis', 'etaMillis', 'taskName', 'url']) {
-                options = options."$key"(value)
-            } else if (key == 'headers') {
-                if (value instanceof Map) {
-                    value.each { headerKey, headerValue ->
-                        options = options.header(headerKey, headerValue)
-                    }
-                } else {
-                    throw new RuntimeException("The headers key/value pairs should be passed as a map.")
-                }
-            } else if (key == 'method') {
-                if (value instanceof TaskOptions.Method) {
-                    options = options.method(value)
-                } else if(value in ['GET', 'POST', 'PUT', 'DELETE', 'HEAD']) {
-                    options = options.method(TaskOptions.Method.valueOf(value))
-                } else {
-                    throw new RuntimeException("Not a valid method: $value")
-                }
-            } else if (key == 'params') {
-                if (value instanceof Map) {
-                    value.each { paramKey, paramValue ->
-                        options = options.param(paramKey, paramValue.toString())
-                    }
-                } else {
-                    throw new RuntimeException("The params key/value pairs should be passed as a map.")
-                }
-            } else if (key == 'payload') {
-                if (value instanceof List) {
-                    options = options.payload(*(value.collect { it.toString() }))
-                } else if (value instanceof String) {
-                    options = options.payload(value)
-                } else {
-                    options = options.payload(value.toString())
-                }
-            } else {
-                throw new RuntimeException("$key is not a valid task option.\n" +
-                    "Allowed: countdownMillis, etaMillis, taskName, url, headers, methods, params and payload")
-            }
-        }
-        return selfQueue.add(options)
-    }
-
-    /**
-     * Add a new task on the queue using a map for holding the task attributes instead of a TaskOptions builder object.
-     * This method adds a <code>&lt;&lt;</code> operator on the <code>Queue</code> for adding new tasks to it.
-     * <p>
-     * Allowed keys are: <ul>
-     * <li><code>countdownMillis</code></li>
-     * <li><code>etaMillis</code></li>
-     * <li><code>headers</code> (a map of key/value pairs)</li>
-     * <li><code>method</code> (can be 'GET', 'POST', 'PUT', 'DELETE', 'HEAD' or an enum of TaskOptions.Method)</li>
-     * <li><code>params</code> (a map of key/value parameters)</li>
-     * <li><code>payload</code></li>
-     * <li><code>taskName</code></li>
-     * <li><code>url</code></li>
-     * </ul>
-     *
-     * @param params the map of task attributes
-     * @return a TaskHandle instance
-     */
-    static TaskHandle leftShift(Queue selfQueue, Map params) {
-        GaelykCategory.add(selfQueue, params)
-    }
-
-    // ----------------------------------------------------------------
-    // Category methods dedicated to the Jabber/XMPP support
-    // ----------------------------------------------------------------
-
-    /**
-     * Send an XMPP/Jabber message with the XMPP service using a map of attributes to build the message.
-     * <p>
-     * Possible attributes are:
-     * <ul>
-     * <li>from: the sender Jabber ID represented as a String</li>
-     * <li>to: a String or a list of String representing recepients' Jabber IDs</li>
-     * <li>type: an instance of the MessageType enum, or a String representation
-     * ('CHAT', 'ERROR', 'GROUPCHAT', 'HEADLINE', 'NORMAL')</li>
-     * <li>body: a String representing the raw text to send</li>
-     * <li>xml: a closure representing the XML you want to send (serialized using StreamingMarkupBuilder)</li>
-     * </ul>
-     *
-     * @param msgAttr a map of attributes as described
-     * @return an intance of SendResponse
-     */
-    static SendResponse send(XMPPService xmppService, Map msgAttr) {
-        MessageBuilder msgBuilder = new MessageBuilder()
-
-        if (msgAttr.xml && msgAttr.body) {
-            throw new RuntimeException("You have to choose between XML and text bodies, you can't have both!")
-        }
-
-        // sets the body of the message
-        if (msgAttr.xml) {
-            msgBuilder.asXml(true)
-            def xml = new StreamingMarkupBuilder().bind(msgAttr.xml)
-            msgBuilder.withBody(xml.toString())
-        } else if (msgAttr.body) {
-            msgBuilder.withBody(msgAttr.body)
-        }
-
-        // sets the recepients of the message
-        if (msgAttr.to) {
-            if (msgAttr.to instanceof String) {
-                msgBuilder.withRecipientJids(new JID(msgAttr.to))
-            } else if (msgAttr.to instanceof List) {
-                msgBuilder.withRecipientJids(msgAttr.to.collect{ new JID(it) } as JID[])
-            }
-        }
-
-        // sets the sender of the message
-        if (msgAttr.from) {
-            msgBuilder.withFromJid(new JID(msgAttr.from))
-        }
-
-        // sets the type of the message
-        if (msgAttr.type) {
-            if (msgAttr.type instanceof MessageType) {
-                msgBuilder.withMessageType(msgAttr.type)
-            } else if (msgAttr.type instanceof String) {
-                msgBuilder.withMessageType(MessageType.valueOf(msgAttr.type))
-            }
-        }
-
-        xmppService.sendMessage(msgBuilder.build())
-    }
-
-    /**
-     * Send a chat invitation to a Jabber ID.
-     *
-     * @param the Jabber ID to invite
-     */
-    static void sendInvitation(XMPPService xmppService, String jabberId) {
-        xmppService.sendInvitation(new JID(jabberId))
-    }
-
-    /**
-     * Send a chat invitation to a Jabber ID from another Jabber ID.
-     *
-     * @param jabberIdTo the Jabber ID to invite
-     * @param jabberIdFrom the Jabber ID to use to send the invitation request
-     */
-    static void sendInvitation(XMPPService xmppService, String jabberIdTo, String jabberIdFrom) {
-        xmppService.sendInvitation(new JID(jabberIdTo), new JID(jabberIdFrom))
-    }
-
-    /**
-     * Get the presence of a Jabber ID.
-     *
-     * @param the Jabber ID
-     * @return the presence information
-     */
-    static Presence getPresence(XMPPService xmppService, String jabberId) {
-        xmppService.getPresence(new JID(jabberId))
-    }
-
-    /**
-     * Get the presence of a Jabber ID.
-     *
-     * @param jabberIdTo the Jabber ID to get the presence from
-     * @param jabberIdFrom the Jabber ID to use to send the presence request
-     * @return the presence information
-     */
-    static Presence getPresence(XMPPService xmppService, String jabberIdTo, String jabberIdFrom) {
-        xmppService.getPresence(new JID(jabberIdTo), new JID(jabberIdFrom))
-    }
-
-    /**
-     * Get the sender Jabber ID of the message in the form of a String.
-     *
-     * @return the Jabber ID of the sender
-     */
-    static String getFrom(com.google.appengine.api.xmpp.Message message) {
-        message.getFromJid().getId()
-    }
-
-    /**
-     * Get the XML content of this message (if it's an XML message) in the form of a DOM parsed with XmlSlurper.
-     *
-     * @return the slurped XML document
-     */
-    static GPathResult getXml(com.google.appengine.api.xmpp.Message message) {
-        if (message.isXml()) {
-            def slurper = new XmlSlurper()
-            return slurper.parseText(message.getStanza())
-        } else {
-            throw new RuntimeException("You can't get the XML of this message as this is not an XML message.")
-        }
-    }
-
-    /**
-     * Gets the list of recipients of this message in the form of a list of Jabber ID strings.
-     *
-     * @return a list of Jabber ID strings
-     */
-    static List getRecipients(com.google.appengine.api.xmpp.Message message) {
-        message.getRecipientJids().collect { it.getId() }
-    }
-
-    /**
-     * Checks the status of the sending of the message was successful for all its recipients
-     */
-    static boolean isSuccessful(SendResponse status) {
-        status.statusMap.every { it.value == SendResponse.Status.SUCCESS }
-    }
-
-    // ----------------------------------------------------------------
-    // Category methods dedicated to the memcache service
-    // ----------------------------------------------------------------
-
-    /**
-     * Get an object from the cache, identified by its key, using the subscript notation:
-     * <code>def obj = memcacheService[key]</code>
-     *
-     * @param key the key identifying the object to get from the cache
-     */
-    static Object getAt(MemcacheService memcache, Object key) {
-        memcache.get(key)
-    }
-
-    /**
-     * Put an object into the cache, identified by its key, using the subscript notation:
-     * <code>memcacheService[key] = value</code>
-     *
-     * @param key the key identifying the object to put in the cache
-     * @param value the value to put in the cache
-     */
-    static void putAt(MemcacheService memcache, Object key, Object value) {
-        memcache.put(key, value)
-    }
-
-    /**
-     * Shortcut to check whether a key is contained in the cache using the <code>in</code> operator:
-     * <code>key in memcacheService</code>
-     */
-    static boolean isCase(MemcacheService memcache, Object key) {
-        memcache.contains(key)
-    }
-
-    static Object set(groovy.lang.Script binding, Object key, Object val) {
-      binding.request.setAttribute key, val
-      return val
-    }
-
-    static Object get(groovy.lang.Script binding, Object key) {
-      return binding.request.getAttribute(key)
-    }
-
-    static void sendRedirect(groovy.lang.Script binding, Object url) {
-      binding.response.sendRedirect url
-    }
-
+	
+	// ----------------------------------------------------------------
+	// Category methods dedicated to the Mail service
+	// ----------------------------------------------------------------
+	
+	/**
+	 * Create a <code>MailService.Message</code> out of Map parameters.
+	 * Each map key must correspond to a valid property on the message object.
+	 */
+	
+	private static Message createMessageFromMap(Map m) {
+		def msg = new Message()
+		m.each {k, v ->
+			if (v instanceof String) v = [v]
+			msg[k] = v
+		}
+		return msg
+	}
+	
+	/**
+	 * Additional <code>send()</code> method taking a map as parameter.
+	 * The map can contain the normal properties of the
+	 * <code>MailService.Message</code> class.
+	 *
+	 * @throws groovy.lang.MissingPropertyException when the key doesn't correspond
+	 * to a property of the <code>MailService.Message</code> class.
+	 */
+	static void send(MailService mailService, Map m) {
+		Message msg = createMessageFromMap(m)
+		mailService.send msg
+	}
+	
+	
+	/**
+	 * Additional <code>sendToAdmins()</code> method for sending emails to the application admins.
+	 * This method is taking a map as parameter.
+	 * The map can contain the normal properties of the
+	 * <code>MailService.Message</code> class.
+	 *
+	 * @param
+	 *
+	 * @throws groovy.lang.MissingPropertyException when the key doesn't correspond
+	 * to a property of the <code>MailService.Message</code> class.
+	 */
+	static void sendToAdmins(MailService mailService, Map m) {
+		Message msg = createMessageFromMap(m)
+		mailService.sendToAdmins msg
+	}
+	
+	// ----------------------------------------------------------------
+	// Category methods dedicated to the low-level DataStore service
+	// ----------------------------------------------------------------
+	
+	/**
+	 * Provides a shortcut notation to get a property of an entity.
+	 * Instead of writing
+	 * <code>entity.getProperty('propertyName')</code>
+	 * You can use the shortcut
+	 * <code>entity['propertyName']</code>
+	 */
+	static Object getAt(Entity entity, String name) {
+		entity.getProperty(name)
+	}
+	
+	/**
+	 * Provides a shortcut notation to get a property of an entity.
+	 * Instead of writing
+	 * <code>entity.getProperty('propertyName')</code>
+	 * You can use the shortcut
+	 * <code>entity.propertyName</code>
+	 */
+	static Object get(Entity entity, String name) {
+		entity.getProperty(name)
+	}
+	
+	/**
+	 * Provides a shortcut notation to set a property of an entity.
+	 * Instead of writing
+	 * <code>entity.setProperty('propertyName', value)</code>
+	 * You can use the shortcut
+	 * <code>entity.propertyName = value</code>
+	 * Or
+	 * <code>entity['propertyName'] = value</code>
+	 */
+	static Object setAt(Entity entity, String name, Object value) {
+		entity.setProperty(name, value)
+	}
+	
+	/**
+	 * Provides a shortcut notation to set a property of an entity.
+	 * Instead of writing
+	 * <code>entity.setProperty('propertyName', value)</code>
+	 * You can use the shortcut
+	 * <code>entity.propertyName = value</code>
+	 * Or
+	 * <code>entity['propertyName'] = value</code>
+	 */
+	static Object set(Entity entity, String name, Object value) {
+		entity.setProperty(name, value)
+	}
+	
+	/**
+	 * Save this entity in the data store.
+	 * Usage: <code>entity.save()</code>
+	 */
+	static Object save(Entity entity) {
+		DatastoreServiceFactory.datastoreService.put(entity)
+	}
+	
+	/**
+	 * Delete this entity from the data store.
+	 * Usage: <code>entity.delete()</code>
+	 */
+	static Object delete(Entity entity) {
+		DatastoreServiceFactory.datastoreService.delete(entity.key)
+	}
+	
+	/**
+	 * With this method, transaction handling is done transparently.
+	 * The transaction is committed if the closure executed properly.
+	 * The transaction is rollbacked if anything went wrong.
+	 * You can use this method as follows:
+	 * <code>
+	 * datastoreService.withTransaction { transaction ->
+	 *     // do something in that transaction
+	 * }
+	 * </code>
+	 */
+	static Transaction withTransaction(DatastoreService service, Closure c) {
+		Transaction transaction = service.beginTransaction()
+		try {
+			// pass the transaction as single parameter of the closure
+			c(transaction)
+			// commit the transaction if the closure executed without throwing an exception
+			transaction.commit()
+		} catch (e) {
+			// rollback on error
+			transaction.rollback()
+			// rethrow the exception
+			throw e
+		}
+	}
+	
+	// ----------------------------------------------------------------
+	// Category methods dedicated to the task queue system
+	// ----------------------------------------------------------------
+	
+	/**
+	 * Shorcut to get the name of the Queue.
+	 * <p>
+	 * Instead of having to call <code>queue.getQueueName()</code> or <code>queue.queueName</code>,
+	 * you can use the syntax <code>queue.name</code> which is more concise.
+	 *
+	 * @return the name of the queue
+	 */
+	static String getName(Queue selfQueue) {
+		selfQueue.getQueueName()
+	}
+	
+	/**
+	 * Add a new task on the queue using a map for holding the task attributes instead of a TaskOptions builder object.
+	 * <p>
+	 * Allowed keys are: <ul>
+	 * <li><code>countdownMillis</code></li>
+	 * <li><code>etaMillis</code></li>
+	 * <li><code>headers</code> (a map of key/value pairs)</li>
+	 * <li><code>method</code> (can be 'GET', 'POST', 'PUT', 'DELETE', 'HEAD' or an enum of TaskOptions.Method)</li>
+	 * <li><code>params</code> (a map of key/value parameters)</li>
+	 * <li><code>payload</code></li>
+	 * <li><code>taskName</code></li>
+	 * <li><code>url</code></li>
+	 * </ul>
+	 *
+	 * @param params the map of task attributes
+	 * @return a TaskHandle instance
+	 */
+	static TaskHandle add(Queue selfQueue, Map params) {
+		def options = TaskOptions.Builder.withDefaults()
+		params.each { key, value ->
+			if (key in ['countdownMillis', 'etaMillis', 'taskName', 'url']) {
+				options = options."$key"(value)
+			} else if (key == 'headers') {
+				if (value instanceof Map) {
+					value.each { headerKey, headerValue ->
+						options = options.header(headerKey, headerValue)
+					}
+				} else {
+					throw new RuntimeException("The headers key/value pairs should be passed as a map.")
+				}
+			} else if (key == 'method') {
+				if (value instanceof TaskOptions.Method) {
+					options = options.method(value)
+				} else if(value in ['GET', 'POST', 'PUT', 'DELETE', 'HEAD']) {
+					options = options.method(TaskOptions.Method.valueOf(value))
+				} else {
+					throw new RuntimeException("Not a valid method: $value")
+				}
+			} else if (key == 'params') {
+				if (value instanceof Map) {
+					value.each { paramKey, paramValue ->
+						options = options.param(paramKey, paramValue.toString())
+					}
+				} else {
+					throw new RuntimeException("The params key/value pairs should be passed as a map.")
+				}
+			} else if (key == 'payload') {
+				if (value instanceof List) {
+					options = options.payload(*(value.collect { it.toString() }))
+				} else if (value instanceof String) {
+					options = options.payload(value)
+				} else {
+					options = options.payload(value.toString())
+				}
+			} else {
+				throw new RuntimeException("$key is not a valid task option.\n" +
+				"Allowed: countdownMillis, etaMillis, taskName, url, headers, methods, params and payload")
+			}
+		}
+		return selfQueue.add(options)
+	}
+	
+	/**
+	 * Add a new task on the queue using a map for holding the task attributes instead of a TaskOptions builder object.
+	 * This method adds a <code>&lt;&lt;</code> operator on the <code>Queue</code> for adding new tasks to it.
+	 * <p>
+	 * Allowed keys are: <ul>
+	 * <li><code>countdownMillis</code></li>
+	 * <li><code>etaMillis</code></li>
+	 * <li><code>headers</code> (a map of key/value pairs)</li>
+	 * <li><code>method</code> (can be 'GET', 'POST', 'PUT', 'DELETE', 'HEAD' or an enum of TaskOptions.Method)</li>
+	 * <li><code>params</code> (a map of key/value parameters)</li>
+	 * <li><code>payload</code></li>
+	 * <li><code>taskName</code></li>
+	 * <li><code>url</code></li>
+	 * </ul>
+	 *
+	 * @param params the map of task attributes
+	 * @return a TaskHandle instance
+	 */
+	static TaskHandle leftShift(Queue selfQueue, Map params) {
+		GaelykCategory.add(selfQueue, params)
+	}
+	
+	// ----------------------------------------------------------------
+	// Category methods dedicated to the Jabber/XMPP support
+	// ----------------------------------------------------------------
+	
+	/**
+	 * Send an XMPP/Jabber message with the XMPP service using a map of attributes to build the message.
+	 * <p>
+	 * Possible attributes are:
+	 * <ul>
+	 * <li>from: the sender Jabber ID represented as a String</li>
+	 * <li>to: a String or a list of String representing recepients' Jabber IDs</li>
+	 * <li>type: an instance of the MessageType enum, or a String representation
+	 * ('CHAT', 'ERROR', 'GROUPCHAT', 'HEADLINE', 'NORMAL')</li>
+	 * <li>body: a String representing the raw text to send</li>
+	 * <li>xml: a closure representing the XML you want to send (serialized using StreamingMarkupBuilder)</li>
+	 * </ul>
+	 *
+	 * @param msgAttr a map of attributes as described
+	 * @return an intance of SendResponse
+	 */
+	static SendResponse send(XMPPService xmppService, Map msgAttr) {
+		MessageBuilder msgBuilder = new MessageBuilder()
+		
+		if (msgAttr.xml && msgAttr.body) {
+			throw new RuntimeException("You have to choose between XML and text bodies, you can't have both!")
+		}
+		
+		// sets the body of the message
+		if (msgAttr.xml) {
+			msgBuilder.asXml(true)
+			def xml = new StreamingMarkupBuilder().bind(msgAttr.xml)
+			msgBuilder.withBody(xml.toString())
+		} else if (msgAttr.body) {
+			msgBuilder.withBody(msgAttr.body)
+		}
+		
+		// sets the recepients of the message
+		if (msgAttr.to) {
+			if (msgAttr.to instanceof String) {
+				msgBuilder.withRecipientJids(new JID(msgAttr.to))
+			} else if (msgAttr.to instanceof List) {
+				msgBuilder.withRecipientJids(msgAttr.to.collect{ new JID(it) } as JID[])
+			}
+		}
+		
+		// sets the sender of the message
+		if (msgAttr.from) {
+			msgBuilder.withFromJid(new JID(msgAttr.from))
+		}
+		
+		// sets the type of the message
+		if (msgAttr.type) {
+			if (msgAttr.type instanceof MessageType) {
+				msgBuilder.withMessageType(msgAttr.type)
+			} else if (msgAttr.type instanceof String) {
+				msgBuilder.withMessageType(MessageType.valueOf(msgAttr.type))
+			}
+		}
+		
+		xmppService.sendMessage(msgBuilder.build())
+	}
+	
+	/**
+	 * Send a chat invitation to a Jabber ID.
+	 *
+	 * @param the Jabber ID to invite
+	 */
+	static void sendInvitation(XMPPService xmppService, String jabberId) {
+		xmppService.sendInvitation(new JID(jabberId))
+	}
+	
+	/**
+	 * Send a chat invitation to a Jabber ID from another Jabber ID.
+	 *
+	 * @param jabberIdTo the Jabber ID to invite
+	 * @param jabberIdFrom the Jabber ID to use to send the invitation request
+	 */
+	static void sendInvitation(XMPPService xmppService, String jabberIdTo, String jabberIdFrom) {
+		xmppService.sendInvitation(new JID(jabberIdTo), new JID(jabberIdFrom))
+	}
+	
+	/**
+	 * Get the presence of a Jabber ID.
+	 *
+	 * @param the Jabber ID
+	 * @return the presence information
+	 */
+	static Presence getPresence(XMPPService xmppService, String jabberId) {
+		xmppService.getPresence(new JID(jabberId))
+	}
+	
+	/**
+	 * Get the presence of a Jabber ID.
+	 *
+	 * @param jabberIdTo the Jabber ID to get the presence from
+	 * @param jabberIdFrom the Jabber ID to use to send the presence request
+	 * @return the presence information
+	 */
+	static Presence getPresence(XMPPService xmppService, String jabberIdTo, String jabberIdFrom) {
+		xmppService.getPresence(new JID(jabberIdTo), new JID(jabberIdFrom))
+	}
+	
+	/**
+	 * Get the sender Jabber ID of the message in the form of a String.
+	 *
+	 * @return the Jabber ID of the sender
+	 */
+	static String getFrom(com.google.appengine.api.xmpp.Message message) {
+		message.getFromJid().getId()
+	}
+	
+	/**
+	 * Get the XML content of this message (if it's an XML message) in the form of a DOM parsed with XmlSlurper.
+	 *
+	 * @return the slurped XML document
+	 */
+	static GPathResult getXml(com.google.appengine.api.xmpp.Message message) {
+		if (message.isXml()) {
+			def slurper = new XmlSlurper()
+			return slurper.parseText(message.getStanza())
+		} else {
+			throw new RuntimeException("You can't get the XML of this message as this is not an XML message.")
+		}
+	}
+	
+	/**
+	 * Gets the list of recipients of this message in the form of a list of Jabber ID strings.
+	 *
+	 * @return a list of Jabber ID strings
+	 */
+	static List getRecipients(com.google.appengine.api.xmpp.Message message) {
+		message.getRecipientJids().collect { it.getId() }
+	}
+	
+	/**
+	 * Checks the status of the sending of the message was successful for all its recipients
+	 */
+	static boolean isSuccessful(SendResponse status) {
+		status.statusMap.every { it.value == SendResponse.Status.SUCCESS }
+	}
+	
+	// ----------------------------------------------------------------
+	// Category methods dedicated to the memcache service
+	// ----------------------------------------------------------------
+	
+	/**
+	 * Get an object from the cache, identified by its key, using the subscript notation:
+	 * <code>def obj = memcacheService[key]</code>
+	 *
+	 * @param key the key identifying the object to get from the cache
+	 */
+	static Object getAt(MemcacheService memcache, Object key) {
+		memcache.get(key)
+	}
+	
+	/**
+	 * Put an object into the cache, identified by its key, using the subscript notation:
+	 * <code>memcacheService[key] = value</code>
+	 *
+	 * @param key the key identifying the object to put in the cache
+	 * @param value the value to put in the cache
+	 */
+	static void putAt(MemcacheService memcache, Object key, Object value) {
+		memcache.put(key, value)
+	}
+	
+	/**
+	 * Shortcut to check whether a key is contained in the cache using the <code>in</code> operator:
+	 * <code>key in memcacheService</code>
+	 */
+	static boolean isCase(MemcacheService memcache, Object key) {
+		memcache.contains(key)
+	}
+	
+	static Object set(groovy.lang.Script binding, Object key, Object val) {
+		binding.request.setAttribute key, val
+		return val
+	}
+	
+	static Object get(groovy.lang.Script binding, Object key) {
+		return binding.request.getAttribute(key)
+	}
+	
+//	static Object model(groovy.lang.Script binding, Object key, Object val) {
+//		def m = model(binding)
+//		m.key = val
+//	}
+//	
+//	public static final String GAELYK_MODEL = "gaelyk.model";
+//	
+//	static Object model(groovy.lang.Script binding) {
+//		def model = binding.request.getAttribute(GAELYK_MODEL)
+//		if (!model) {
+//			model = [:]
+//			binding.request.setAttribute(GAELYK_MODEL, model)
+//		}
+//		return model
+//	}
+	
+	static void sendRedirect(groovy.lang.Script binding, Object url) {
+		binding.response.sendRedirect url
+	}
+	
 }

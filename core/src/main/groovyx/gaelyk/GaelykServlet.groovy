@@ -25,24 +25,27 @@ import java.io.IOException
 /**
  * The Gaelyk servlet extends Groovy's own Groovy servlet
  * to inject Google App Engine dedicated services in the binding of the Groolets.
- * 
+ *
  * @author Marcel Overdijk
  * @author Guillaume Laforge
  *
  * @see groovy.servlet.GroovyServlet
  */
-class GaelykServlet extends GroovyServlet {
-
-    @Override
-    protected void setVariables(ServletBinding binding) {
-        GaelykBindingEnhancer enhancer = new GaelykBindingEnhancer(binding)
-        enhancer.bind()
-    }
-
-    @Override
-    void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        use (GaelykCategory) {
-            super.service(request, response)
-        }
-    }
+class GaelykServlet extends TestServlet {
+	
+	@Override
+	protected void setVariables(ServletBinding binding) {
+		GaelykBindingEnhancer enhancer = new GaelykBindingEnhancer(binding)
+		enhancer.bind()
+		GaelykModelBindingEnhancer modelEnhancer = new GaelykModelBindingEnhancer(binding)
+		modelEnhancer.servlet();
+	}
+	
+	@Override
+	void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
+		use (GaelykCategory) {
+			super.service(request, response)
+			
+		}
+	}
 }
