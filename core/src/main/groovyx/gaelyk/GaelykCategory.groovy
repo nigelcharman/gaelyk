@@ -144,6 +144,20 @@ class GaelykCategory {
 	}
 	
 	/**
+	 * Provides a shortcut notation to copying all of the entries 
+         * from a map to properties of an entity. This is equivalent
+	 * to calling
+	 * <code>entity.setProperty(key, value)</code>
+	 * for each entry in the map, where key is the entry key and
+         * value is the entry value.
+	 */
+	static Object putAll(Entity entity, Map map) {
+		map.each { key, value ->
+			entity[key] = value
+		}
+	}
+	
+	/**
 	 * Save this entity in the data store.
 	 * Usage: <code>entity.save()</code>
 	 */
